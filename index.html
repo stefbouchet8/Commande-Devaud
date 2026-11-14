@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#d4001a">
 <link rel="icon" href="icon-192.png">
-<title>Commande fruits et légumes</title>
+<title>Cocci Primeur</title>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#f4f7f1;--card:#fff;--ink:#1d2a21;--mute:#64736a;--line:#d6dfd2;--green:#2f6b3f;--red:#d4001a;--soft:#e8f0e4;
@@ -117,7 +117,7 @@ h+='<div class="row" data-id="'+it.id+'">'+
 '<input class="n" data-k="n" value="'+esc(it.n)+'" aria-label="Produit">'+
 '<select class="u" data-k="u" aria-label="Unité">'+UNITS.map(function(u){return'<option'+(u===it.u?' selected':'')+'>'+u+'</option>'}).join("")+'</select>'+
 '<input class="p" data-k="p" inputmode="decimal" value="'+esc(it.p)+'" placeholder="0,00" aria-label="Prix d\'achat">'+
-'<input class="q" data-k="q" inputmode="decimal" value="'+esc(it.q)+'" placeholder="0" aria-label="Quantité">'+
+'<input class="q" data-k="q" inputmode="decimal" enterkeyhint="next" value="'+esc(it.q)+'" placeholder="0" aria-label="Quantité">'+
 '<div class="sub"></div>'+
 '<div class="act"><button class="x" data-up="1" aria-label="Monter">▲</button><button class="x" data-down="1" aria-label="Descendre">▼</button><button class="x" data-ins="1" aria-label="Insérer un produit dessous">＋</button><button class="x" data-del="1" aria-label="Supprimer">×</button></div></div>'});
 h+='</div>'});
@@ -138,6 +138,13 @@ var tv=t*num(S.tva)/100;document.getElementById("ht").textContent=fmt.format(t);
 document.getElementById("cnt").textContent=c+(c>1?" produits commandés":" produit commandé");
 return t}
 var L0=document.getElementById("list");
+L0.addEventListener("keydown",function(e){
+if(e.key!=="Enter"||!e.target.classList.contains("q"))return;
+e.preventDefault();
+var qs=Array.prototype.slice.call(document.querySelectorAll(".row .q"));
+var n=qs[qs.indexOf(e.target)+1];
+if(n){n.focus();n.select();if(n.scrollIntoView)n.scrollIntoView({block:"center"})}else{e.target.blur()}});
+L0.addEventListener("focusin",function(e){if(e.target.classList.contains("q")){var t=e.target;setTimeout(function(){try{t.select()}catch(x){}},0)}});
 L0.addEventListener("input",function(e){
 var r=e.target.closest(".row");if(!r)return;
 var it=find(r.dataset.id);
