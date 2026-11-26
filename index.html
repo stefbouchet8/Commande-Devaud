@@ -45,6 +45,7 @@ button.b.p{background:var(--green);color:var(--bg)}
 #login .box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;max-width:360px;width:100%;display:flex;flex-direction:column;gap:10px}
 #login .box p{margin:0;color:var(--mute);font-size:.9rem}
 #lerr{color:var(--red);font-size:.85rem;min-height:1.2em}
+#lforgot{background:none;border:0;color:var(--green);text-decoration:underline;cursor:pointer;font:inherit;font-size:.85rem}
 #lskip{background:none;border:0;color:var(--mute);text-decoration:underline;cursor:pointer;font:inherit;font-size:.85rem}
 @media print{.sync,#login{display:none!important}}
 .note{font-size:.85rem;color:var(--mute);min-height:1.2em}
@@ -77,6 +78,7 @@ button.b.p{background:var(--green);color:var(--bg)}
 <button class="b" id="print">Imprimer</button>
 </div>
 <div class="note" id="note"></div>
+<div class="note" style="text-align:center">Cocci Primeur · version 4</div>
 <div class="bar"><button class="b s" id="logout" style="display:none">Se déconnecter</button></div>
 </main>
 <div id="login"><div class="box">
@@ -84,13 +86,15 @@ button.b.p{background:var(--green);color:var(--bg)}
 <p>Connectez-vous une fois : vos prix et vos commandes se synchronisent entre vos appareils.</p>
 <input id="lmail" type="email" placeholder="Adresse e-mail" autocomplete="username">
 <input id="lpass" type="password" placeholder="Mot de passe" autocomplete="current-password">
+<label style="display:flex;align-items:center;gap:8px;font-size:.9rem;color:var(--mute)"><input type="checkbox" id="lshow" style="width:auto"> Afficher le mot de passe</label>
 <div id="lerr"></div>
 <button class="b p" id="lbtn">Se connecter</button>
+<button id="lforgot">Mot de passe oublié ?</button>
 <button id="lskip">Continuer sans synchroniser</button>
 </div></div>
 <script>
 var KEY="commande-fl-v2";
-var UNITS=["pièce","colis","kg","botte","barquette"];
+var UNITS=["pièce","colis","kg","botte","barquette","sachet","filet"];
 var CATS={
 "Légumes":["Carotte","Carotte sable","Navets","Poireaux","Radis","Betteraves rouges cuites","Pomme de terre nouvelle","Pdt filet 2,5kg Agata","Pdt filet 2,5kg Amandine","Pdt filet 2,5kg Annabelle","PDT Mitrailles","Patate Douce","Ail","Oignon jaune","Oignon rouge","Echalotte","Salade cœur de laitue","Salade composée","Salade Feuille de Chêne Rouge","Salade Batavia","Sucrine","Endive vrac","Persil plat","Bouquet garni","Brocoli","Chou pommé","Chou frisé","Chou-fleur","Champignons de Paris 250g","Concombre","Courgette","Aubergine","Tomate Grappe","Tomate cœur de pigeon","Tomate cœur de pigeon Duo","Tomate 3 couleurs","Plateau tomates farcies","Poivron tricolore","Poivron rouge"],
 "Agrumes":["Citron jaune","Citron vert","Orange","Mandarine","Clémentine"],
@@ -192,7 +196,7 @@ if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch
 </script>
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut,sendPasswordResetEmail} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import {initializeFirestore,persistentLocalCache,getFirestore,doc,onSnapshot,setDoc} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 const firebaseConfig={
   apiKey:"AIzaSyDAURttcW1ZHesy1dAsLMbSOxpjRPsvzHM",
@@ -208,22 +212,22 @@ const auth=getAuth(app);
 let db;
 try{db=initializeFirestore(app,{localCache:persistentLocalCache()})}catch(e){db=getFirestore(app)}
 const ref=()=>doc(db,"commande_fl","courante");
-let unsub=null,timer=null,applying=false;
+let unsub=null,timer=null,applying=false,inflight=0;
 function status(t,ok){const e=$("sync");e.textContent="Synchronisation : "+t;e.style.color=ok?"var(--green)":"var(--mute)"}
 function snap(){return{date:S.date||"",fourn:S.fourn||"",tva:S.tva||"",items:S.items}}
 const canon=o=>JSON.stringify(o,(k,v)=>v&&typeof v==="object"&&!Array.isArray(v)?Object.keys(v).sort().reduce((a,x)=>(a[x]=v[x],a),{}):v);
-async function push(){try{await setDoc(ref(),snap());status("à jour",1)}catch(e){status("erreur ("+(e.code||"inconnue")+")",0)}}
+async function push(){inflight++;try{await setDoc(ref(),snap());status("à jour",1)}catch(e){status("erreur ("+(e.code||"inconnue")+")",0)}finally{inflight--}}
 window.cloudPush=function(){
   if(applying||!auth.currentUser)return;
   clearTimeout(timer);status("enregistrement…",1);
-  timer=setTimeout(push,700)};
+  timer=setTimeout(function(){timer=null;push()},700)};
 onAuthStateChanged(auth,function(u){
   if(unsub){unsub();unsub=null}
   if(!u){$("login").style.display="flex";$("logout").style.display="none";status("non connecté",0);return}
   $("login").style.display="none";$("logout").style.display="";status("connexion…",1);
   unsub=onSnapshot(ref(),function(d){
     if(!d.exists()){if(!d.metadata.fromCache)push();return}
-    if(d.metadata.hasPendingWrites)return;
+    if(d.metadata.hasPendingWrites||timer||inflight>0)return;
     const r=d.data(),remote={date:r.date||"",fourn:r.fourn||"",tva:r.tva||"",items:r.items||[]};
     if(canon(remote)===canon(snap())){status(navigator.onLine?"à jour":"hors connexion",navigator.onLine);return}
     applying=true;
@@ -238,6 +242,13 @@ $("lbtn").onclick=async function(){
   catch(e){$("lerr").textContent=(e.code==="auth/invalid-credential"||e.code==="auth/wrong-password"||e.code==="auth/user-not-found")?"Adresse ou mot de passe incorrect.":"Connexion impossible ("+(e.code||"erreur")+")"}};
 $("lpass").addEventListener("keydown",function(e){if(e.key==="Enter")$("lbtn").click()});
 $("lskip").onclick=function(){$("login").style.display="none"};
+$("lshow").onchange=function(){$("lpass").type=this.checked?"text":"password"};
+$("lforgot").onclick=async function(){
+  var e=$("lerr"),m=$("lmail").value.trim();
+  e.style.color="var(--red)";
+  if(!m){e.textContent="Saisissez d'abord votre adresse e-mail ci-dessus.";return}
+  try{await sendPasswordResetEmail(auth,m);e.style.color="var(--green)";e.textContent="E-mail envoyé : ouvrez-le (vérifiez les courriers indésirables) et suivez le lien."}
+  catch(x){e.textContent="Envoi impossible ("+(x.code||"erreur")+")"}};
 $("logout").onclick=function(){signOut(auth)};
 window.addEventListener("offline",function(){if(auth.currentUser)status("hors connexion",0)});
 window.addEventListener("online",function(){if(auth.currentUser)status("à jour",1)});
